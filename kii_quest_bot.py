@@ -702,13 +702,24 @@ async def render_node(
 
     keyboard = build_keyboard(node["choices"])
 
-    if edit and update.callback_query:  # noqa
-        # При переходе на START через кнопку — отправляем новым сообщением с фото,
-        # редактировать фото-сообщение в текст нельзя
+    if edit and update.callback_query:
+        chat_id = update.callback_query.message.chat_id
+        prev_is_photo = bool(update.callback_query.message.photo)
+
         if node_id == "START":
-            chat_id = update.callback_query.message.chat_id
+            # START всегда отправляем новым сообщением с фото
             await _send_start_with_photo(context, chat_id, node["text"], keyboard)
+        elif prev_is_photo:
+            # Предыдущее сообщение было фото — нельзя edit_message_text,
+            # отправляем новое текстовое сообщение
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=node["text"],
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
         else:
+            # Обычное текстовое сообщение — редактируем на месте
             await update.callback_query.edit_message_text(
                 text=node["text"],
                 parse_mode="Markdown",
