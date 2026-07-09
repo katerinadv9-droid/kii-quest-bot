@@ -23,6 +23,26 @@ from telegram.ext import (
 # Путь к картинке стартовой сцены (лежит рядом с ботом)
 START_IMAGE_PATH = Path(__file__).parent / "start_image.jpg"
 
+# Картинки концовок
+ENDING_IMAGES: dict[str, Path] = {
+    "END_GOOD":      Path(__file__).parent / "end_good.jpg",
+    "END_DIY_SOLID": Path(__file__).parent / "diy_solid.jpg",
+    "END_MID":       Path(__file__).parent / "survive.jpg",
+    "END_BAD":       Path(__file__).parent / "end_bad.jpg",
+}
+
+# Сообщение-аутро после каждой концовки (HTML)
+OUTRO_TEXT = (
+    "💡 <b>Секрет хорошей концовки в реальной жизни:</b>\n\n"
+    "📥 Скачайте <a href=\"https://astracloud.ru/file/kii2026.pdf?utm_medium=kii_bot&utm_source=telegram&utm_campaign=astra_cloud\">чек-лист «10 шагов для перехода на КИИ»</a>\n\n"
+    "📣 Следите за обновлениями в <a href=\"https://t.me/astra_cloud_official\">телеграм-канале Astra Cloud</a> — "
+    "скоро мы объявим о релизе Защищённого аттестованного облака.\n\n"
+    "📚 <b>Ещё полезное:</b>\n"
+    "• <a href=\"https://astracloud.ru/articles/critical-information-infrastructure-in-russia?utm_medium=kii_bot&utm_source=telegram&utm_campaign=astra_cloud\">КИИ в России: что это такое, кто попадает под закон и что нужно сделать до 2028 года</a>\n"
+    "• <a href=\"https://astracloud.ru/?utm_medium=kii_bot&utm_source=telegram&utm_campaign=astra_cloud\">Сайт Astra Cloud</a>\n"
+    "• <a href=\"https://t.me/astragroup\">Телеграм-канал «Группы Астра»</a>"
+)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -702,16 +722,17 @@ async def render_node(
 
     keyboard = build_keyboard(node["choices"])
 
+    ENDING_NODES = ("END_GOOD", "END_DIY_SOLID", "END_MID", "END_BAD")
+
     if edit and update.callback_query:
         chat_id = update.callback_query.message.chat_id
         prev_is_photo = bool(update.callback_query.message.photo)
 
         if node_id == "START":
-            # START всегда отправляем новым сообщением с фото
             await _send_start_with_photo(context, chat_id, node["text"], keyboard)
+        elif node_id in ENDING_NODES:
+            await _send_ending(context, chat_id, node_id, node["text"], keyboard)
         elif prev_is_photo:
-            # Предыдущее сообщение было фото — нельзя edit_message_text,
-            # отправляем новое текстовое сообщение
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=node["text"],
@@ -719,7 +740,6 @@ async def render_node(
                 reply_markup=keyboard,
             )
         else:
-            # Обычное текстовое сообщение — редактируем на месте
             await update.callback_query.edit_message_text(
                 text=node["text"],
                 parse_mode="Markdown",
@@ -733,6 +753,8 @@ async def render_node(
         )
         if node_id == "START":
             await _send_start_with_photo(context, chat_id, node["text"], keyboard)
+        elif node_id in ENDING_NODES:
+            await _send_ending(context, chat_id, node_id, node["text"], keyboard)
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -761,6 +783,34 @@ async def _send_start_with_photo(context, chat_id, text, keyboard):
             parse_mode="Markdown",
             reply_markup=keyboard,
         )
+
+
+async def _send_ending(context, chat_id, node_id, text, keyboard):
+    """Отправляет концовку: картинка + текст + кнопки, затем аутро-сообщение."""
+    image_path = ENDING_IMAGES.get(node_id)
+    if image_path and image_path.exists():
+        with open(image_path, "rb") as photo:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=InputFile(photo, filename=image_path.name),
+                caption=text,
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+    else:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode="Markdown",
+            reply_markup=keyboard,
+        )
+    # Аутро — отдельным сообщением без кнопок
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=OUTRO_TEXT,
+        parse_mode="HTML",
+        disable_web_page_preview=False,
+    )
 
 
 # ─────────────────────────────────────────────────────────────
